@@ -1,32 +1,30 @@
-import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
-
-const PROMPTS: Record<string, string> = {"default": "You are a computational genomicist. Given a DNA/RNA sequence or gene identifier, provide:\n1. Sequence Overview: Length, GC content, complexity, repeats detected\n2. Predicted Gene Structure: Exons, introns, UTRs, start/stop codons, frame\n3. Homology Analysis: Closest species homologs and percent identity\n4. Functional Annotation: Putative function based on domains and motifs\n5. Regulatory Elements: Predicted promoters, enhancers, transcription factor binding sites\n6. Variant Interpretation: Classify variants as benign/likely benign/VOUS/likely pathogenic/pathogenic\n7. Conservation Score: PhyloP or GERP++ equivalent interpretation\n8. Associated Phenotypes: OMIM entries, disease associations, inheritance pattern\n9. Expression Data: Tissue-specific expression patterns\n10. Experimental Validation Suggestions: qPCR, Western blot, CRISPR targets\n\nUse standard nomenclature (HGVS, RefSeq).", "ai-genomic-annotation": "You are a computational genomicist. Given a DNA/RNA sequence or gene identifier, provide:\n1. Sequence Overview: Length, GC content, complexity, repeats detected\n2. Predicted Gene Structure: Exons, introns, UTRs, start/stop codons, frame\n3. Homology Analysis: Closest species homologs and percent identity\n4. Functional Annotation: Putative function based on domains and motifs\n5. Regulatory Elements: Predicted promoters, enhancers, transcription factor binding sites\n6. Variant Interpretation: Classify variants as benign/likely benign/VOUS/likely pathogenic/pathogenic\n7. Conservation Score: PhyloP or GERP++ equivalent interpretation\n8. Associated Phenotypes: OMIM entries, disease associations, inheritance pattern\n9. Expression Data: Tissue-specific expression patterns\n10. Experimental Validation Suggestions: qPCR, Western blot, CRISPR targets\n\nUse standard nomenclature (HGVS, RefSeq)."};
+import { NextRequest, NextResponse } from 'next/server';
+import OpenAI from 'openai';
 
 export async function POST(req: NextRequest) {
   try {
-    const { input, taskType } = await req.json();
-    if (!input) return NextResponse.json({ error: "Input required" }, { status: 400 });
-
-    const client = new OpenAI({
+    const { prompt } = await req.json();
+    if (!prompt?.trim()) {
+      return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
+    }
+    const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
-      baseURL: "https://api.deepseek.com/v1",
+      baseURL: 'https://api.deepseek.com/v1',
     });
-
-    const systemPrompt = PROMPTS[taskType] || PROMPTS["default"];
-    const completion = await client.chat.completions.create({
-      model: "deepseek-chat",
+    const completion = await openai.chat.completions.create({
+      model: 'deepseek-chat',
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: input },
+        {
+          role: 'system',
+          content: `You are an expert computational biologist and genomicist. Analyze the provided DNA or protein sequence and generate a comprehensive genomic annotation summary including:\n1. Gene structure prediction (exons, introns, UTRs, CDS)\n2. Functional domain identification\n3. Regulatory element annotation (promoters, enhancers, TF binding sites)\n4. Variant effect predictions (SNPs, indels)\n5. Homology and orthology analysis\n6. Functional pathway associations\n\nUse standard genomic notation and ensure scientific precision.`,
+        },
+        { role: 'user', content: prompt },
       ],
       temperature: 0.7,
       max_tokens: 2000,
     });
-
     return NextResponse.json({ result: completion.choices[0].message.content });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 500 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
   }
 }
